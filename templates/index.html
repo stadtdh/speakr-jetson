@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <title>Speakr - Audio Transcription & Summarization</title>
+    {% include 'includes/loading_overlay.html' %}
+    <!-- All dependencies bundled locally for offline support -->
+    <script src="{{ url_for('static', filename='vendor/js/tailwind.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/vue.global.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/js/marked.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/easymde.min.css') }}">
+    <script src="{{ url_for('static', filename='vendor/js/easymde.min.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/css/fontawesome.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/icon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/icon-16x16.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/icon-180x180.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#2563eb">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    maxHeight: {
+                        '85vh': '85vh',
+                        '90vh': '90vh'
+                    },
+                    colors: {
+                        primary: 'var(--bg-primary)',
+                        secondary: 'var(--bg-secondary)',
+                        accent: 'var(--bg-accent)'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors duration-300">
+    <div id="loader" class="fixed inset-0 bg-gray-800 flex items-center justify-center z-50">
+        <div class="text-white text-lg">Loading...</div>
+    </div>
+    <div id="app" v-cloak
+         data-use-asr-endpoint="{{ use_asr_endpoint }}"
+         data-connector-supports-diarization="{{ connector_supports_diarization }}"
+         data-connector-supports-speaker-count="{{ connector_supports_speaker_count }}"
+         data-enable-archive-toggle="{{ enable_archive_toggle }}"
+         data-enable-internal-sharing="{{ enable_internal_sharing }}"
+         data-current-user-name="{{ (current_user.name or current_user.username) if current_user.is_authenticated else '' }}"
+         data-user-language="{{ user_language }}"
+         class="h-full flex flex-col opacity-0 transition-opacity duration-500">
+
+        <!-- Header -->
+        {% include 'components/header.html' %}
+
+        <div class="flex-1 flex overflow-hidden relative">
+            <!-- Mobile Sidebar Backdrop -->
+            <div v-if="!isSidebarCollapsed && isMobileScreen"
+                 @click="toggleSidebar"
+                 class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden">
+            </div>
+
+            <!-- Sidebar -->
+            {% include 'components/sidebar.html' %}
+
+            <!-- Main Content Area -->
+            <main :class="['flex-1 flex flex-col overflow-hidden main-content', !isSidebarCollapsed && !isMobileScreen ? 'sidebar-open' : '']">
+                <!-- Upload View -->
+                {% include 'components/upload-view.html' %}
+
+                <!-- Recording View -->
+                {% include 'components/recording-view.html' %}
+
+                <!-- Detail View -->
+                {% include 'components/detail-view.html' %}
+            </main>
+        </div>
+
+        <!-- Upload Progress Popup -->
+        {% include 'components/progress-popup.html' %}
+
+        <!-- Modals -->
+        {% include 'modals/edit-modal.html' %}
+        {% include 'modals/delete-modal.html' %}
+        {% include 'modals/edit-tags-modal.html' %}
+        {% include 'modals/datetime-picker-modal.html' %}
+        {% include 'modals/shares-list-modal.html' %}
+        {% include 'modals/reset-modal.html' %}
+        {% include 'modals/reprocess-modal.html' %}
+        {% include 'modals/speaker-modal.html' %}
+        {% include 'modals/add-speaker-modal.html' %}
+        {% include 'modals/edit-text-modal.html' %}
+        {% include 'modals/text-editor-modal.html' %}
+        {% include 'modals/asr-editor-modal.html' %}
+        {% include 'modals/edit-speakers-modal.html' %}
+        {% include 'modals/edit-participants-modal.html' %}
+        {% include 'modals/color-scheme-modal.html' %}
+        {% include 'modals/system-audio-help-modal.html' %}
+        {% include 'modals/recording-disclaimer-modal.html' %}
+        {% include 'modals/recording-recovery-modal.html' %}
+        {% include 'modals/unified-share-modal.html' %}
+        {% include 'modals/share-delete-modal.html' %}
+        {% include 'modals/global-error.html' %}
+        {% include 'modals/toast-container.html' %}
+
+        <!-- Bulk Operations Modals -->
+        {% include 'modals/bulk-delete-modal.html' %}
+        {% include 'modals/bulk-tag-modal.html' %}
+        {% include 'modals/bulk-reprocess-modal.html' %}
+    </div>
+
+    <!-- CSRF Token Management -->
+    <script src="{{ url_for('static', filename='js/csrf-refresh.js') }}"></script>
+
+    <!-- i18n System -->
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+
+    <!-- Initialize i18n immediately with fallback -->
+    <script>
+        // Ensure i18n is initialized before Vue app
+        (async function() {
+            const startTime = Date.now();
+            const maxWait = 3000; // Max 3 seconds for i18n to load
+
+            try {
+                if (window.i18n && window.i18n.init) {
+                    const userLang = localStorage.getItem('preferredLanguage') || '{{ user_language }}' || 'en';
+
+                    // Race between i18n init and timeout
+                    await Promise.race([
+                        window.i18n.init(userLang),
+                        new Promise((resolve) => setTimeout(resolve, maxWait))
+                    ]);
+
+                    const elapsed = Date.now() - startTime;
+                    console.log('i18n initialized in', elapsed, 'ms');
+                } else {
+                    console.warn('i18n not available, continuing without translations');
+                }
+            } catch (error) {
+                console.error('Failed to initialize i18n:', error);
+                // Continue anyway - app will use fallback translations
+            }
+
+            // Hide initial loader after i18n attempt
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.style.display = 'none';
+            }
+        })();
+    </script>
+
+    <!-- Service Worker Registration handled by app.modular.js -->
+
+    <!-- Vue.js Application Script -->
+    <script type="module" src="{{ url_for('static', filename='js/app.modular.js') }}"></script>
+</body>
+</html>

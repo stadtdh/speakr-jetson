@@ -1,0 +1,110 @@
+<!-- Audio Player Component (Mobile) -->
+<div class="bg-[var(--bg-secondary)] px-4 py-3 border-b border-[var(--border-primary)] flex-shrink-0">
+    <!-- Show message if audio has been deleted -->
+    <div v-if="selectedRecording.audio_deleted_at"
+         class="text-[var(--text-muted)] text-sm flex items-center gap-2">
+        <i class="fas fa-info-circle"></i>
+        <span v-text="t('help.audioDeletedMessage')"></span>
+    </div>
+    <!-- Show message for incognito recordings (no audio stored) -->
+    <div v-else-if="selectedRecording.incognito"
+         class="text-[var(--text-muted)] text-sm flex items-center gap-2">
+        <i class="fas fa-user-secret"></i>
+        <span>Audio not stored in incognito mode</span>
+    </div>
+    <!-- Custom Audio Player -->
+    <div v-else>
+        <!-- Hidden audio element -->
+        <audio ref="audioPlayerElement"
+               :src="'/audio/' + selectedRecording.id"
+               :volume="playerVolume"
+               @play="handleAudioPlayPause"
+               @pause="handleAudioPlayPause"
+               @timeupdate="handleCustomAudioTimeUpdate"
+               @loadedmetadata="handleAudioLoadedMetadata"
+               @durationchange="handleAudioDurationChange"
+               @ended="handleAudioEnded"
+               @waiting="handleAudioWaiting"
+               @canplay="handleAudioCanPlay"
+               class="hidden">
+        </audio>
+
+        <!-- Progress Bar (draggable, touch support) -->
+        <div class="w-full h-4 rounded-full cursor-pointer relative mb-2 group flex items-center"
+             @mousedown="startProgressDrag"
+             @touchstart.prevent="startProgressDrag">
+            <!-- Track background -->
+            <div class="w-full h-2 rounded-full relative bg-[var(--border-accent)] opacity-40">
+                <!-- Progress fill -->
+                <div class="h-full bg-[var(--text-accent)] rounded-full pointer-events-none opacity-100"
+                     :style="{ width: audioProgressPercent + '%' }"></div>
+            </div>
+            <!-- Progress dot - stays within track bounds -->
+            <div class="absolute top-1/2 w-4 h-4 bg-[var(--text-accent)] rounded-full shadow-md transition-transform group-hover:scale-110 pointer-events-none -translate-y-1/2"
+                 :style="{ left: 'clamp(0px, calc(' + audioProgressPercent + '% - 8px), calc(100% - 16px))' }"
+                 style="box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
+        </div>
+
+        <!-- Controls Row -->
+        <div class="flex items-center gap-2">
+            <!-- Play/Pause Button -->
+            <button @click="toggleAudioPlayback"
+                    class="w-10 h-10 flex items-center justify-center rounded-full player-play-button transition-all duration-200 flex-shrink-0 shadow-md hover:shadow-lg active:scale-95"
+                    :title="audioIsPlaying ? t('tooltips.pause') : t('tooltips.play')">
+                <i :class="audioIsPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-base" :style="!audioIsPlaying ? 'margin-left: 2px' : ''"></i>
+            </button>
+
+            <!-- Time Display -->
+            <div class="flex items-baseline gap-1 flex-shrink-0">
+                <span class="text-sm font-semibold font-mono" :class="isDraggingProgress ? 'text-[var(--text-accent)]' : 'text-[var(--text-primary)]'">${ formatAudioTime(displayCurrentTime) }</span>
+                <span class="text-xs text-[var(--text-muted)]">/</span>
+                <span class="text-xs text-[var(--text-muted)] font-mono">${ formatAudioTime(audioDuration) }</span>
+            </div>
+
+            <!-- Playback Speed Control -->
+            <div class="relative flex-shrink-0">
+                <button ref="speedButtonMobile"
+                        @click="showSpeedMenu = !showSpeedMenu; $nextTick(() => updateSpeedMenuPosition($refs.speedButtonMobile))"
+                        data-speed-toggle
+                        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-primary)] text-[var(--text-accent)] hover:opacity-80 transition-all"
+                        :title="t('tooltips.playbackSpeed') || 'Playback speed'">
+                    <span class="text-xs font-semibold font-mono">${ formatPlaybackRate(playbackRate) }</span>
+                </button>
+                <!-- Dropdown menu (teleported to body, fixed positioning) -->
+                <Teleport to="body">
+                    <div v-if="showSpeedMenu" @click.stop
+                         data-speed-dropdown
+                         class="fixed bg-[var(--bg-tertiary)] border border-[var(--border-accent)] rounded-md shadow-xl z-[9999] speed-dropdown overflow-y-auto backdrop-blur-sm"
+                         :style="speedMenuPosition">
+                        <div class="py-0.5">
+                            <button v-for="speed in playbackSpeeds" :key="speed"
+                                    @mousedown.prevent="setPlaybackRate(speed); showSpeedMenu = false"
+                                    class="w-full px-2 py-0.5 text-[11px] font-mono text-left hover:bg-[var(--bg-accent-light)] transition-colors"
+                                    :class="speed === playbackRate ? 'text-[var(--text-accent)] font-semibold bg-[var(--bg-accent-light)]' : 'text-[var(--text-primary)]'">
+                                ${ speed }x
+                            </button>
+                        </div>
+                    </div>
+                </Teleport>
+            </div>
+
+            <!-- Spacer -->
+            <div class="flex-1"></div>
+
+            <!-- Volume Button -->
+            <button @click="toggleAudioMute"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-primary)] text-[var(--text-accent)] hover:opacity-80 transition-all flex-shrink-0"
+                    :title="audioIsMuted ? t('tooltips.unmute') : t('tooltips.mute')">
+                <i :class="audioIsMuted || playerVolume === 0 ? 'fas fa-volume-mute' : 'fas fa-volume-up'" class="text-sm"></i>
+            </button>
+
+            <!-- Download Button -->
+            <a :href="'/audio/' + selectedRecording.id + '?download=true'"
+               download
+               class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-primary)] text-[var(--text-accent)] hover:opacity-80 transition-all flex-shrink-0"
+               :title="t('buttons.downloadAudio') || 'Download audio'">
+                <i class="fas fa-download text-sm"></i>
+            </a>
+        </div>
+    </div>
+</div>
