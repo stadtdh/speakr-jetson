@@ -1,0 +1,13 @@
+# Torch is provided by NVIDIA L4T base image
+# DO NOT install torch or torchvision via pip on Jetson
+
+flask
+gunicorn
+openai
+huggingface-hub
+
+numpy
+scikit-learn
+sentence-transformers
+
+psycopg2-binary
